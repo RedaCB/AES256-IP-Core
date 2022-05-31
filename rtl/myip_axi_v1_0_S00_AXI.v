@@ -5,29 +5,45 @@
 	(
 		// Users to add parameters here
 
+        // AES256_FIFO
+		parameter integer C_S_FIFO_DATA_IN_WIDTH  = 32,
+		parameter integer C_S_FIFO_DATA_OUT_WIDTH = 32,
+		parameter integer C_S_FIFO_SIZE	          = 16,
+		
 		// User parameters ends
 		// Do not modify the parameters beyond this line
 
 		// Width of ID for for write address, write data, read address and read data
-		parameter integer C_S_AXI_ID_WIDTH	= 1,
+		parameter integer C_S_AXI_ID_WIDTH        = 1,
 		// Width of S_AXI data bus
-		parameter integer C_S_AXI_DATA_WIDTH	= 32,
+		parameter integer C_S_AXI_DATA_WIDTH      = 32,
 		// Width of S_AXI address bus
-		parameter integer C_S_AXI_ADDR_WIDTH	= 6,
+		parameter integer C_S_AXI_ADDR_WIDTH      = 6,
 		// Width of optional user defined signal in write address channel
-		parameter integer C_S_AXI_AWUSER_WIDTH	= 0,
+		parameter integer C_S_AXI_AWUSER_WIDTH    = 0,
 		// Width of optional user defined signal in read address channel
-		parameter integer C_S_AXI_ARUSER_WIDTH	= 0,
+		parameter integer C_S_AXI_ARUSER_WIDTH    = 0,
 		// Width of optional user defined signal in write data channel
-		parameter integer C_S_AXI_WUSER_WIDTH	= 0,
+		parameter integer C_S_AXI_WUSER_WIDTH     = 0,
 		// Width of optional user defined signal in read data channel
-		parameter integer C_S_AXI_RUSER_WIDTH	= 0,
+		parameter integer C_S_AXI_RUSER_WIDTH     = 0,
 		// Width of optional user defined signal in write response channel
-		parameter integer C_S_AXI_BUSER_WIDTH	= 0
+		parameter integer C_S_AXI_BUSER_WIDTH     = 0
+		
 	)
 	(
 		// Users to add ports here
-
+		
+		// AES256 FIFO
+		/// FIFO IN
+		output S_FIFO_IN_EMPTY,
+		output S_FIFO_IN_FULL,
+		wire [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_IN_RDATA,
+		/// FIFO OUT
+        output S_FIFO_OUT_EMPTY,
+		output S_FIFO_OUT_FULL,
+		reg [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_OUT_WDATA,
+		
 		// User ports ends
 		// Do not modify the ports beyond this line
 
@@ -540,10 +556,13 @@
 	        end            
 	    end
 	end    
+		
+	
 	// ------------------------------------------
 	// -- Example code to access user logic memory region
 	// ------------------------------------------
-
+    
+    /*
 	generate
 	  if (USER_NUM_MEM >= 1)
 	    begin
@@ -595,6 +614,7 @@
 	endgenerate
 	//Output register or memory read data
 
+    
 	always @( mem_data_out, axi_rvalid)
 	begin
 	  if (axi_rvalid) 
@@ -606,9 +626,72 @@
 	    begin
 	      axi_rdata <= 32'h00000000;
 	    end       
-	end    
+	end
+	*/
 
 	// Add user logic here
+	
+	// ------------------------------------------
+	// -- Memory Addressing
+	// ------------------------------------------
+	reg fifo_in_active;
+	always @(S_AXI_AWADDR) begin
+	
+	   if (S_AXI_AWADDR == 6'h04) begin
+	       fifo_in_active = 1'b1;
+	   end
+	
+	end
+	
+	// ------------------------------------------
+	// -- FIFO Implementation
+	// ------------------------------------------
+	
+	reg mem_in_rden;
+	wire mem_out_rden;
+    wire mem_in_wren;
+    reg mem_out_wren;
+    
+    assign mem_in_wren = axi_wready && S_AXI_WVALID && fifo_in_active ;
+    
+    assign mem_out_rden = axi_arv_arr_flag ; //& ~axi_rvalid
+	      
+	fifo_data FIFO_DATA_IN(
+        .clk(S_AXI_ACLK),
+        .resetn(S_AXI_ARESETN),
+        .write_fifo(mem_in_wren),
+        .read_fifo(mem_in_rden),
+        .data_in(S_AXI_WDATA),
+        .data_out(S_FIFO_IN_RDATA),
+        .empty_fifo(S_FIFO_IN_EMPTY),
+        .full_fifo(S_FIFO_IN_FULL)
+    );
+    
+    fifo_data FIFO_DATA_OUT(
+        .clk(S_AXI_ACLK),
+        .resetn(S_AXI_ARESETN),
+        .write_fifo(mem_out_wren),
+        .read_fifo(mem_out_rden),
+        .data_in(S_FIFO_IN_RDATA),
+        .data_out(S_AXI_RDATA),
+        .empty_fifo(S_FIFO_OUT_EMPTY),
+        .full_fifo(S_FIFO_OUT_FULL)
+    );
+    
+    always @(posedge S_AXI_ACLK) begin
+    
+        if ( S_AXI_ARESETN == 1'b0 ) begin
+            mem_in_rden <= 0;
+            mem_out_wren  <= 0;
+        end 
+        else begin
+            mem_out_wren = mem_in_rden;
+            mem_in_rden = (S_FIFO_IN_EMPTY == 1'b0 && mem_in_rden == 1'b0) ? 1'b1 : 1'b0;
+            
+        end
+    
+    end
+   
 
 	// User logic ends
 

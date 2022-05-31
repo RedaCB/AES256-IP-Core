@@ -20,7 +20,8 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 `define FIFO_SZ 4
-`define FIFO_WH 4
+`define FIFO_DATA_IN_WH 32
+`define FIFO_DATA_OUT_WH 32
 
 module fifo_data(
         clk, resetn,
@@ -33,14 +34,14 @@ module fifo_data(
     
 input clk, resetn;
 input write_fifo, read_fifo;
-input [31 : 0] data_in;
-output reg [`FIFO_WH : 0] counter_fifo;
+input [`FIFO_DATA_IN_WH - 1 : 0] data_in;
+output reg [`FIFO_SZ : 0] counter_fifo;
 output empty_fifo, full_fifo;
-output reg [31 : 0] data_out;
+output reg [`FIFO_DATA_OUT_WH - 1 : 0] data_out;
 
-reg [31 : 0] memory_fifo [`FIFO_SZ - 1 : 0];
-reg [`FIFO_WH : 0] write_ptr;
-reg [`FIFO_WH : 0] read_ptr;
+reg [`FIFO_DATA_OUT_WH - 1 : 0] memory_fifo [`FIFO_SZ - 1 : 0];
+reg [`FIFO_SZ : 0] write_ptr;
+reg [`FIFO_SZ : 0] read_ptr;
 
 
 assign empty_fifo = (counter_fifo == 0) ? 1'b1 : 1'b0;

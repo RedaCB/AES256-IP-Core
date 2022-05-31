@@ -291,13 +291,13 @@ module tb_axinewreda();
         #period;
         enableResetn();
         #period;
-        axi_write('h01, 'hFFFFFFFF);
+        axi_write('h04, 'hFFFFFFFF);
         #period;
         initialState();
         axi_multi_write('h08);
         #period;
         initialState();
-        axi_read('h00);
+        axi_read('h04);
         $stop;
     end
     
