@@ -1,7 +1,7 @@
 
 `timescale 1 ns / 1 ps
 
-	module myip_axi_v1_0_S00_AXI #
+	module myip_axi_fifo_v1_S00_AXI #
 	(
 		// Users to add parameters here
 
@@ -14,22 +14,21 @@
 		// Do not modify the parameters beyond this line
 
 		// Width of ID for for write address, write data, read address and read data
-		parameter integer C_S_AXI_ID_WIDTH        = 1,
+		parameter integer C_S_AXI_ID_WIDTH	= 1,
 		// Width of S_AXI data bus
-		parameter integer C_S_AXI_DATA_WIDTH      = 32,
+		parameter integer C_S_AXI_DATA_WIDTH	= 32,
 		// Width of S_AXI address bus
-		parameter integer C_S_AXI_ADDR_WIDTH      = 6,
+		parameter integer C_S_AXI_ADDR_WIDTH	= 6,
 		// Width of optional user defined signal in write address channel
-		parameter integer C_S_AXI_AWUSER_WIDTH    = 0,
+		parameter integer C_S_AXI_AWUSER_WIDTH	= 0,
 		// Width of optional user defined signal in read address channel
-		parameter integer C_S_AXI_ARUSER_WIDTH    = 0,
+		parameter integer C_S_AXI_ARUSER_WIDTH	= 0,
 		// Width of optional user defined signal in write data channel
-		parameter integer C_S_AXI_WUSER_WIDTH     = 0,
+		parameter integer C_S_AXI_WUSER_WIDTH	= 0,
 		// Width of optional user defined signal in read data channel
-		parameter integer C_S_AXI_RUSER_WIDTH     = 0,
+		parameter integer C_S_AXI_RUSER_WIDTH	= 0,
 		// Width of optional user defined signal in write response channel
-		parameter integer C_S_AXI_BUSER_WIDTH     = 0
-		
+		parameter integer C_S_AXI_BUSER_WIDTH	= 0
 	)
 	(
 		// Users to add ports here
@@ -43,7 +42,7 @@
         output S_FIFO_OUT_EMPTY,
 		output S_FIFO_OUT_FULL,
 		reg [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_OUT_WDATA,
-		
+
 		// User ports ends
 		// Do not modify the ports beyond this line
 
@@ -556,8 +555,6 @@
 	        end            
 	    end
 	end    
-		
-	
 	// ------------------------------------------
 	// -- Example code to access user logic memory region
 	// ------------------------------------------
@@ -614,7 +611,6 @@
 	endgenerate
 	//Output register or memory read data
 
-    
 	always @( mem_data_out, axi_rvalid)
 	begin
 	  if (axi_rvalid) 
@@ -626,9 +622,9 @@
 	    begin
 	      axi_rdata <= 32'h00000000;
 	    end       
-	end
-	*/
-
+	end    
+    */
+    
 	// Add user logic here
 	
 	// ------------------------------------------
@@ -639,6 +635,8 @@
 	
 	   if (S_AXI_AWADDR == 6'h04) begin
 	       fifo_in_active = 1'b1;
+	   end else begin
+	       fifo_in_active = 1'b0;
 	   end
 	
 	end
@@ -647,14 +645,14 @@
 	// -- FIFO Implementation
 	// ------------------------------------------
 	
-	reg mem_in_rden;
-	wire mem_out_rden;
-    wire mem_in_wren;
-    reg mem_out_wren;
+	reg mem_in_rden;       // Señal para leer en memoria de FIFO IN
+	reg mem_out_rden;     // Señal para leer en memoria de FIFO OUT
+    wire mem_in_wren;      // Señal para escribir en memoria de FIFO IN
+    reg mem_out_wren;      // Señal para escribir en memoria de FIFO OUT
     
     assign mem_in_wren = axi_wready && S_AXI_WVALID && fifo_in_active ;
     
-    assign mem_out_rden = axi_arv_arr_flag ; //& ~axi_rvalid
+    // assign mem_out_rden = axi_arv_arr_flag ; //& ~axi_rvalid
 	      
 	fifo_data FIFO_DATA_IN(
         .clk(S_AXI_ACLK),
@@ -691,7 +689,20 @@
         end
     
     end
-   
+    
+    
+    always @(posedge S_AXI_ACLK) begin
+    
+        if ( S_AXI_ARESETN == 1'b0 ) begin
+            mem_out_rden  <= 0;
+        end 
+        else begin
+            
+            mem_out_rden = (axi_arv_arr_flag == 1'b1 && mem_out_rden == 1'b0) ? 1'b1 : 1'b0;
+            
+        end
+    
+    end
 
 	// User logic ends
 
