@@ -33,7 +33,7 @@ reg [5 : 0] addrw_addr;
 reg [7 : 0] addrw_numTranfers;
 reg [2 : 0] addrw_size;
 reg [1 : 0] addrw_burst;
-reg [1 : 0] addrw_id;
+reg [0 : 0] addrw_id;
 
 reg [31 : 0] dataw_data;
 reg dataw_last;
@@ -61,7 +61,7 @@ reg datar_ready;
 // Outputs of AXI4 - READ
 wire addrr_ready;
 
-wire datar_resp;
+wire [1 : 0] datar_resp;
 wire [31 : 0] datar_data;
 wire datar_valid;
 wire datar_last;
@@ -168,7 +168,7 @@ fork : f
     begin
         // Configure Address of Write
         #period;
-        addrw_id = 2'b11;
+        addrw_id = 1'b1;
         addrw_valid = 1'b1;
         assign addrw_addr  = i_addr;
         addrw_numTranfers = 8'b00000001;
@@ -220,7 +220,7 @@ fork : f
     begin
         // Configure Address of Write
         #period;
-         addrw_id = 2'b11;
+         addrw_id = 1'b1;
          addrw_valid = 1'b1;
          assign addrw_addr  = i_addr;
          addrw_numTranfers = 'h03;
