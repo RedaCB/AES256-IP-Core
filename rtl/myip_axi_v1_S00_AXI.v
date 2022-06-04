@@ -41,7 +41,7 @@
 		/// FIFO OUT
         output S_FIFO_OUT_EMPTY,
 		output S_FIFO_OUT_FULL,
-		reg [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_OUT_WDATA,
+		wire [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_OUT_WDATA,
 
 		// User ports ends
 		// Do not modify the ports beyond this line
