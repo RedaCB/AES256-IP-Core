@@ -630,13 +630,26 @@
 	// ------------------------------------------
 	// -- Memory Addressing
 	// ------------------------------------------
-	reg fifo_in_active;
+	reg fifo_in_active, fifo_out_active;
+
+	// BLOQUE PARA ACTIVAR ESCRITURA AXI4 -> FIFO_IN
 	always @(S_AXI_AWADDR) begin
 	
 	   if (S_AXI_AWADDR == 6'h04) begin
 	       fifo_in_active = 1'b1;
 	   end else begin
 	       fifo_in_active = 1'b0;
+	   end
+	
+	end
+
+	// BLOQUE PARA ACTIVAR ESCRITURA FIFO_OUT -> AXI4
+	always @(S_AXI_ARADDR) begin
+	
+	   if (S_AXI_ARADDR == 'h04) begin
+	       fifo_out_active = 1'b1;
+	   end else begin
+	       fifo_out_active = 1'b0;
 	   end
 	
 	end
@@ -669,13 +682,14 @@
         .clk(S_AXI_ACLK),
         .resetn(S_AXI_ARESETN),
         .write_fifo(mem_out_wren),
-        .read_fifo(mem_out_rden),
+        .read_fifo(axi_rvalid),
         .data_in(S_FIFO_IN_RDATA),
-        .data_out(S_AXI_RDATA),
+        .data_out(S_FIFO_OUT_WDATA),
         .empty_fifo(S_FIFO_OUT_EMPTY),
         .full_fifo(S_FIFO_OUT_FULL)
     );
     
+	// Bloque para controlar señales en la FIFO IN -> OUT
     always @(posedge S_AXI_ACLK) begin
     
         if ( S_AXI_ARESETN == 1'b0 ) begin
@@ -690,7 +704,7 @@
     
     end
     
-    
+    // Bloque para controlar lectura en la FIFO OUT
     always @(posedge S_AXI_ACLK) begin
     
         if ( S_AXI_ARESETN == 1'b0 ) begin
@@ -698,11 +712,25 @@
         end 
         else begin
             
-            mem_out_rden = (axi_arv_arr_flag == 1'b1 && mem_out_rden == 1'b0) ? 1'b1 : 1'b0;
+            mem_out_rden = (axi_arv_arr_flag == 1'b1 && axi_rvalid == 1'b1 && mem_out_rden == 1'b0) ? 1'b1 : 1'b0;
             
         end
     
     end
+
+	// Bloque para controlar salida al BUS AXI
+    always @(mem_out_rden)
+	begin
+	  	if (mem_out_rden && fifo_out_active) 
+	    begin
+	      	// Read address mux
+	      	axi_rdata <= S_FIFO_OUT_WDATA;
+	    end   
+	  	else
+	    begin
+	      	axi_rdata <= 32'h00000000;
+	    end       
+	end   
 
 	// User logic ends
 

@@ -168,38 +168,47 @@ fork : f
     begin
         // Configure Address of Write
         #period;
-         addrw_id = 2'b11;
-         addrw_valid = 1'b1;
-         assign addrw_addr  = i_addr;
-         addrw_numTranfers = 8'b00000001;
-         addrw_size = 3'b010;
-         addrw_burst = 2'b01;
-         #period;
+        addrw_id = 2'b11;
+        addrw_valid = 1'b1;
+        assign addrw_addr  = i_addr;
+        addrw_numTranfers = 8'b00000001;
+        addrw_size = 3'b010;
+        addrw_burst = 2'b01;
+        #period;
     end
     begin
         // Send Data of Write
-         @(posedge addrw_ready);
-         #period;
-         addrw_valid = 1'b0;
-         addrw_id = 1'b0;
-         dataw_valid = 1'b1;
-         assign dataw_data  = i_data;
-         dataw_last = 1'b1;
-         dataw_flash = 4'b0001;
-         #period;
-         // Check Response of Write
-         @(posedge dataw_ready);
+        while (addrw_ready == 1'b0) begin 
             #period;
-            //#period;
-            
-            respw_ready = 1'b1;
+        end
+        if (addrw_ready) begin
+            addrw_valid = 1'b0;
+            addrw_id = 1'b0;
+            dataw_valid = 1'b1;
+            assign dataw_data  = i_data;
+            dataw_last = 1'b1;
+            dataw_flash = 4'b0001;
             #period;
-            @(posedge respw_valid);
-            dataw_flash = 'h0;
-            dataw_valid = 1'b0;
-            respw_ready = 1'b0;
-            dataw_last = 1'b0;
-            
+            // Check Response of Write
+            while (dataw_ready == 1'b0) begin 
+                #period;
+            end
+            if (dataw_ready) begin
+                
+                respw_ready = 1'b1;
+                #period;
+                while (respw_valid == 1'b0) begin 
+                    #period;
+                end
+                if (respw_valid) begin
+                    #period;
+                    dataw_flash = 'h0;
+                    dataw_valid = 1'b0;
+                    respw_ready = 1'b0;
+                    dataw_last = 1'b0;
+                end
+            end
+        end    
     end
     join
 endtask
@@ -272,14 +281,19 @@ task axi_read(
     begin
         // Configure Address of Read
         #period;
-         //addrw_id = 2'b11;
-         addrr_valid = 1'b1;
-         assign addrr_addr = i_addr;
-         addrr_burst = 2'b01;
-         #period;
-         @(posedge datar_valid)
-         begin
+        //addrw_id = 2'b11;
+        addrr_valid = 1'b1;
+        assign addrr_addr = i_addr;
+        addrr_burst = 2'b00;
+        #period;
+        while (datar_valid == 1'b0) begin 
+            #period;
+        end
+        if (datar_valid) begin
+            addrr_valid = 1'b0;
             datar_ready = 1'b1;
+            #(period*3);
+            datar_ready = 1'b0;
         end
     end
 endtask
@@ -294,8 +308,12 @@ begin
     #period;
     axi_write('h04, 'hFFFFFFFF);
     #period;
+    axi_write('h04, 'hAAAAAAAA);
+    #period;
     axi_multi_write('h08);
     #period;
+    axi_read('h04);
+    #(period);
     axi_read('h04);
     #(period*5);
     $stop;
