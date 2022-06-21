@@ -1,7 +1,7 @@
 
 `timescale 1 ns / 1 ps
 
-	module myip_axi_fifo_v1_S00_AXI #
+	module myip_axififo_v1_S00_AXI #
 	(
 		// Users to add parameters here
 
