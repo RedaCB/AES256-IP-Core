@@ -37,7 +37,7 @@ input write_fifo, read_fifo;
 input [`FIFO_DATA_IN_WH - 1 : 0] data_in;
 output reg [`FIFO_SZ : 0] counter_fifo;
 output empty_fifo, full_fifo;
-output reg [`FIFO_DATA_OUT_WH - 1 : 0] data_out;
+output wire [`FIFO_DATA_OUT_WH - 1 : 0] data_out;
 
 reg [`FIFO_DATA_OUT_WH - 1 : 0] memory_fifo [`FIFO_SZ - 1 : 0];
 reg [`FIFO_SZ : 0] write_ptr;
@@ -55,16 +55,8 @@ always @(posedge clk) begin: write
     end
 end
 
-// Read BLOCK
-always @(posedge clk) begin: read
-    if (read_fifo == 1'b1 && empty_fifo == 1'b0)
-    begin
-        data_out <= memory_fifo[read_ptr];
-    end
-end
-
-// Pointer BLOCK
-always @(posedge clk) begin: pointer
+// Pointer Write BLOCK
+always @(posedge clk) begin: pointer_w
     if (resetn == 1'b0) begin
         // Estado inicial
         write_ptr <= 0;
@@ -76,13 +68,36 @@ always @(posedge clk) begin: pointer
             write_ptr <= (write_ptr == `FIFO_SZ - 1) ? 0 : write_ptr + 1;
         end
         //write_ptr <= (write_fifo == 1'b1 && full_fifo == 1'b0 && counter_fifo == `FIFO_SZ) ? 0 : write_ptr;
-        
-        if (read_fifo == 1'b1 && empty_fifo == 1'b0) begin
-            read_ptr <= (read_ptr == `FIFO_SZ - 1) ? 0 : read_ptr + 1;
-        end
-        //read_ptr <= (read_fifo == 1'b1 && empty_fifo == 1'b0) ? read_ptr + 1 : read_ptr;
-        //read_ptr <= (read_fifo == 1'b1 && empty_fifo == 1'b0 && counter_fifo == `FIFO_SZ) ? 0 : read_ptr;
     end
+end
+
+// Read BLOCK
+/*
+always @(posedge read_fifo) begin: read
+    if (read_fifo == 1'b1 && empty_fifo == 1'b0)
+    begin
+        data_out <= memory_fifo[read_ptr];
+    end
+end
+*/
+assign data_out = memory_fifo[read_ptr];
+
+// Pointer Read BLOCK
+always @(posedge clk) begin: pointer_r
+/*
+    if (resetn == 1'b0) begin
+        // Estado inicial
+        //read_ptr <= 0;
+    end
+    else begin
+    */
+    // Estado de trabajo      
+    if (read_fifo == 1'b1 && empty_fifo == 1'b0) begin
+        read_ptr <= (read_ptr == `FIFO_SZ - 1) ? 0 : read_ptr + 1;
+    end
+    //read_ptr <= (read_fifo == 1'b1 && empty_fifo == 1'b0) ? read_ptr + 1 : read_ptr;
+    //read_ptr <= (read_fifo == 1'b1 && empty_fifo == 1'b0 && counter_fifo == `FIFO_SZ) ? 0 : read_ptr;
+    //end
 end
 
 // Counter BLOCK

@@ -658,12 +658,18 @@
 	// -- FIFO Implementation
 	// ------------------------------------------
 	
-	reg mem_in_rden;       // Señal para leer en memoria de FIFO IN
-	reg mem_out_rden;     // Señal para leer en memoria de FIFO OUT
+	wire mem_in_rden;       // Señal para leer en memoria de FIFO IN
+	wire mem_out_rden;     // Señal para leer en memoria de FIFO OUT
     wire mem_in_wren;      // Señal para escribir en memoria de FIFO IN
-    reg mem_out_wren;      // Señal para escribir en memoria de FIFO OUT
+    wire mem_out_wren;      // Señal para escribir en memoria de FIFO OUT
     
     assign mem_in_wren = axi_wready && S_AXI_WVALID && fifo_in_active ;
+    
+    assign mem_out_rden = axi_arv_arr_flag && axi_rvalid && fifo_out_active ;
+    
+    assign mem_out_wren = mem_in_rden;
+    
+    assign mem_in_rden = ~S_FIFO_IN_EMPTY ;
     
     // assign mem_out_rden = axi_arv_arr_flag ; //& ~axi_rvalid
 	      
@@ -690,6 +696,7 @@
     );
     
 	// Bloque para controlar señales en la FIFO IN -> OUT
+	/*
     always @(posedge S_AXI_ACLK) begin
     
         if ( S_AXI_ARESETN == 1'b0 ) begin
@@ -703,8 +710,10 @@
         end
     
     end
+    */
     
     // Bloque para controlar lectura en la FIFO OUT
+    /*
     always @(posedge S_AXI_ACLK) begin
     
         if ( S_AXI_ARESETN == 1'b0 ) begin
@@ -712,14 +721,15 @@
         end 
         else begin
             
-            mem_out_rden = (axi_arv_arr_flag == 1'b1 && axi_rvalid == 1'b1 && mem_out_rden == 1'b0) ? 1'b1 : 1'b0;
+            mem_out_rden = axi_arv_arr_flag && axi_rvalid && ~mem_out_rden ;
             
         end
     
     end
+    */
 
 	// Bloque para controlar salida al BUS AXI
-    always @(mem_out_rden)
+    always @(mem_out_rden, fifo_out_active, fifo_out_active)
 	begin
 	  	if (mem_out_rden && fifo_out_active) 
 	    begin
