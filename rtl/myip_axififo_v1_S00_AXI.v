@@ -5,16 +5,17 @@
 	(
 		// Users to add parameters here
 
-        // AES256_FIFO
+        // AES256_FIFO START
 		parameter integer C_S_FIFO_DATA_IN_WIDTH  = 32,
 		parameter integer C_S_FIFO_DATA_OUT_WIDTH = 32,
 		parameter integer C_S_FIFO_SIZE	          = 16,
+		// AES256_FIFO ENDS
 		
 		// User parameters ends
 		// Do not modify the parameters beyond this line
 
 		// Width of ID for for write address, write data, read address and read data
-		parameter integer C_S_AXI_ID_WIDTH	= 1,
+		parameter integer C_S_AXI_ID_WIDTH		= 1,
 		// Width of S_AXI data bus
 		parameter integer C_S_AXI_DATA_WIDTH	= 32,
 		// Width of S_AXI address bus
@@ -33,15 +34,26 @@
 	(
 		// Users to add ports here
 		
-		// AES256 FIFO
-		/// FIFO IN
+		// AES256 FIFO START
+		/// FIFO_IN START
 		output S_FIFO_IN_EMPTY,
 		output S_FIFO_IN_FULL,
 		wire [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_IN_RDATA,
-		/// FIFO OUT
+		/// FIFO_IN ENDS
+
+		/// FIFO_OUT START
         output S_FIFO_OUT_EMPTY,
 		output S_FIFO_OUT_FULL,
 		wire [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_OUT_WDATA,
+		/// FIFO_OUT ENDS
+
+		// ILA: FIFO Control Signals START
+		output wire wrreqFI,
+		output wire rdreqFI,
+		output wire wrreqFO,
+		output wire rdreqFO,
+		output wire [31:0] dataf,
+		// ILA: FIFO Control Signals ENDS
 
 		// User ports ends
 		// Do not modify the ports beyond this line
@@ -187,7 +199,7 @@
 	reg  	axi_bvalid;
 	reg [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_araddr;
 	reg  	axi_arready;
-	reg [C_S_AXI_DATA_WIDTH-1 : 0] 	axi_rdata;
+	wire [C_S_AXI_DATA_WIDTH-1 : 0] 	axi_rdata;
 	reg [1 : 0] 	axi_rresp;
 	reg  	axi_rlast;
 	reg [C_S_AXI_RUSER_WIDTH-1 : 0] 	axi_ruser;
@@ -628,7 +640,7 @@
 	// Add user logic here
 	
 	// ------------------------------------------
-	// -- Memory Addressing
+	// -- Memory Addressing Start
 	// ------------------------------------------
 	reg fifo_in_active, fifo_out_active;
 
@@ -653,27 +665,24 @@
 	   end
 	
 	end
-	
 	// ------------------------------------------
-	// -- FIFO Implementation
+	// -- Memory Addressing Ends
 	// ------------------------------------------
 	
-	wire mem_in_rden;       // Señal para leer en memoria de FIFO IN
-	wire mem_out_rden;     // Señal para leer en memoria de FIFO OUT
+
+	// ------------------------------------------
+	// -- FIFO Implementation Start
+	// ------------------------------------------
+	reg mem_in_rden;       // Señal para leer en memoria de FIFO IN
+	reg mem_out_rden;     // Señal para leer en memoria de FIFO OUT
     wire mem_in_wren;      // Señal para escribir en memoria de FIFO IN
-    wire mem_out_wren;      // Señal para escribir en memoria de FIFO OUT
+    reg mem_out_wren;      // Señal para escribir en memoria de FIFO OUT
     
     assign mem_in_wren = axi_wready && S_AXI_WVALID && fifo_in_active ;
     
-    assign mem_out_rden = axi_arv_arr_flag && axi_rvalid && fifo_out_active ;
-    
-    assign mem_out_wren = mem_in_rden;
-    
-    assign mem_in_rden = ~S_FIFO_IN_EMPTY ;
-    
     // assign mem_out_rden = axi_arv_arr_flag ; //& ~axi_rvalid
 	      
-	fifo_data FIFO_DATA_IN(
+	fifo_data_in FIFO_DATA_IN_1(
         .clk(S_AXI_ACLK),
         .resetn(S_AXI_ARESETN),
         .write_fifo(mem_in_wren),
@@ -683,8 +692,14 @@
         .empty_fifo(S_FIFO_IN_EMPTY),
         .full_fifo(S_FIFO_IN_FULL)
     );
-    
-    fifo_data FIFO_DATA_OUT(
+	
+	assign wrreqFI = mem_in_wren;
+	assign rdreqFI = mem_in_rden;
+	assign wrreqFO = mem_out_wren;
+	assign rdreqFO = axi_rvalid;
+	assign dataf = S_FIFO_IN_RDATA;
+		    
+    fifo_data_out FIFO_DATA_OUT_1(
         .clk(S_AXI_ACLK),
         .resetn(S_AXI_ARESETN),
         .write_fifo(mem_out_wren),
@@ -694,42 +709,44 @@
         .empty_fifo(S_FIFO_OUT_EMPTY),
         .full_fifo(S_FIFO_OUT_FULL)
     );
-    
+	/* Fifo Read generation. This is valid only for single accesses
+    always @(posedge S_AXI_ACLK) begin
+        if ( S_AXI_ARESETN == 1'b0 ) begin   
+			read_fifo_out <= 1'b0;
+	   	end
+	   	else begin
+			if (axi_rvalid ==1'b1 && */
+		
 	// Bloque para controlar señales en la FIFO IN -> OUT
-	/*
     always @(posedge S_AXI_ACLK) begin
     
         if ( S_AXI_ARESETN == 1'b0 ) begin
-            mem_in_rden <= 0;
-            mem_out_wren  <= 0;
+            mem_in_rden  <= 0;
+            mem_out_wren <= 0;
         end 
         else begin
             mem_out_wren = mem_in_rden;
-            mem_in_rden = (S_FIFO_IN_EMPTY == 1'b0 && mem_in_rden == 1'b0) ? 1'b1 : 1'b0;
-            
+            mem_in_rden  = ~S_FIFO_IN_EMPTY && ~mem_in_rden ;
         end
     
     end
-    */
     
     // Bloque para controlar lectura en la FIFO OUT
-    /*
     always @(posedge S_AXI_ACLK) begin
     
         if ( S_AXI_ARESETN == 1'b0 ) begin
-            mem_out_rden  <= 0;
+            mem_out_rden <= 0;
         end 
         else begin
-            
             mem_out_rden = axi_arv_arr_flag && axi_rvalid && ~mem_out_rden ;
-            
         end
     
-    end
-    */
+	end
 
 	// Bloque para controlar salida al BUS AXI
-    always @(mem_out_rden, fifo_out_active, fifo_out_active)
+	assign axi_rdata = S_FIFO_OUT_WDATA;
+	/*    
+	always @(mem_out_rden, fifo_out_active, fifo_out_active)
 	begin
 	  	if (mem_out_rden && fifo_out_active) 
 	    begin
@@ -740,8 +757,11 @@
 	    begin
 	      	axi_rdata <= 32'h00000000;
 	    end       
-	end   
-
+	end
+	*/
+	// ------------------------------------------
+	// -- FIFO Implementation Ends
+	// ------------------------------------------
 	// User logic ends
 
-	endmodule
+endmodule

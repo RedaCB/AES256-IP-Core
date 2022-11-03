@@ -22,6 +22,13 @@
 	(
 		// Users to add ports here
 
+		// FIFO Control Signals
+		output wire wrreqFI,
+		output wire rdreqFI,
+		output wire wrreqFO,
+		output wire rdreqFO,
+		output wire [31:0] dataf,
+
 		// User ports ends
 		// Do not modify the ports beyond this line
 
@@ -130,7 +137,16 @@
 		.S_AXI_RLAST(s00_axi_rlast),
 		.S_AXI_RUSER(s00_axi_ruser),
 		.S_AXI_RVALID(s00_axi_rvalid),
-		.S_AXI_RREADY(s00_axi_rready)
+		.S_AXI_RREADY(s00_axi_rready),
+
+		// Add user logic here
+		.wrreqFI(wrreqFI),
+		.rdreqFI(rdreqFI),
+		.wrreqFO(wrreqFO),
+		.rdreqFO(rdreqFO),
+		.dataf(dataf)
+		// User logic ends
+
 	);
 
 	// Add user logic here

@@ -29,7 +29,7 @@ module fifo_data_in(
         empty_fifo, full_fifo,
         counter_fifo,
         data_in,
-        data_out,
+        data_out
     );
     
 input clk, resetn;
@@ -60,7 +60,6 @@ always @(posedge clk) begin: pointer_w
     if (resetn == 1'b0) begin
         // Estado inicial
         write_ptr <= 0;
-        read_ptr <= 5'h1F;
     end
     else begin
         // Estado de trabajo
@@ -72,32 +71,29 @@ always @(posedge clk) begin: pointer_w
 end
 
 // Read BLOCK
+assign data_out = memory_fifo[read_ptr];
 /*
 always @(posedge read_fifo) begin: read
-    if (read_fifo == 1'b1 && empty_fifo == 1'b0)
-    begin
+    if (read_fifo == 1'b1 && empty_fifo == 1'b0) begin
         data_out <= memory_fifo[read_ptr];
     end
 end
 */
-assign data_out = memory_fifo[read_ptr];
 
 // Pointer Read BLOCK
 always @(posedge clk) begin: pointer_r
-/*
     if (resetn == 1'b0) begin
         // Estado inicial
-        //read_ptr <= 0;
+       read_ptr <= 5'h1F;
     end
     else begin
-    */
-    // Estado de trabajo      
-    if (read_fifo == 1'b1 && empty_fifo == 1'b0) begin
-        read_ptr <= (read_ptr == `FIFO_SZ - 1) ? 0 : read_ptr + 1;
+        // Estado de trabajo      
+        if (read_fifo == 1'b1 && empty_fifo == 1'b0) begin
+            read_ptr <= (read_ptr == `FIFO_SZ - 1) ? 0 : read_ptr + 1;
+        end
+        //read_ptr <= (read_fifo == 1'b1 && empty_fifo == 1'b0) ? read_ptr + 1 : read_ptr;
+        //read_ptr <= (read_fifo == 1'b1 && empty_fifo == 1'b0 && counter_fifo == `FIFO_SZ) ? 0 : read_ptr;
     end
-    //read_ptr <= (read_fifo == 1'b1 && empty_fifo == 1'b0) ? read_ptr + 1 : read_ptr;
-    //read_ptr <= (read_fifo == 1'b1 && empty_fifo == 1'b0 && counter_fifo == `FIFO_SZ) ? 0 : read_ptr;
-    //end
 end
 
 // Counter BLOCK
