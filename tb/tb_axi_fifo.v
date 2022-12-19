@@ -1,4 +1,4 @@
-`timescale 1ns / 1ps
+`timescale 1ns / 10ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
 // Engineer: 
@@ -23,7 +23,7 @@
 module tb_axi_fifo();
 
 // Local Parameters
-localparam period = 50; // Duration for each bit = period * timescale = period * 1ns = 20ns
+localparam period = 10; // Duration for each bit = period * timescale = period * 1ns = 20ns
 reg clk, resetn;
 
 
@@ -65,10 +65,15 @@ wire [1 : 0] datar_resp;
 wire [31 : 0] datar_data;
 wire datar_valid;
 wire datar_last;
+wire kg_fin;
+
+// Registers
+wire [31 : 0] reg_status;
+wire [31 : 0] reg_control;
 
 
 // Instance of module AXI4
-myip_axi_fifo_v1 UUT(
+myip_axififo_v1 UUT(
     .s00_axi_aclk(clk),
     .s00_axi_aresetn(resetn),
     
@@ -108,7 +113,10 @@ myip_axi_fifo_v1 UUT(
     .s00_axi_rresp(datar_resp),
     .s00_axi_rlast(datar_last),
     .s00_axi_rvalid(datar_valid),
-    .s00_axi_rready(datar_ready)
+    .s00_axi_rready(datar_ready),
+    
+    .s01_reg_status(reg_status),
+    .s02_reg_control(reg_control)
 
 );
 
@@ -146,8 +154,6 @@ begin
     
     datar_ready <= 1'b1;
     
-    
-    #period;
 end
 endtask
 
@@ -330,25 +336,140 @@ endtask
 
 always @(posedge clk)
 begin
+    // ------------------------------------------
+	// -- Phase 0: Active System
+	// ------------------------------------------
     resetn = 1'b0;
     initialState();
     #period;
     enableResetn();
     #period;
+    
+    // ------------------------------------------
+	// -- Phase 1: Generate Key
+	// ------------------------------------------
+    /* CARGAMOS FIFO_SEED */
+    // SEED_1 (CT-O & Device):  aaaaaaaa bbbbbbbb cccccccc dddddddd aaaaaaaa bbbbbbbb cccccccc dddddddd
+    // KEY_1 (Result CT-O):     87dad8e4 b53b8489 32a019e9 41425310
+    // KEY_1 (Result Device):   10534241 e919a032 89843bb5 e4d8da87
+    
+    // SEED_2 (CT-O):           00010203 04050607 08090a0b 0c0d0e0f 00010203 04050607 08090a0b 0c0d0e0f
+    // SEED_2 (Device):         03020100 07060504 0b0a0908 0f0e0d0c 03020100 07060504 0b0a0908 0f0e0d0c
+    // SEED_2 (Result CT-O):    ...
+    // SEED_2 (Result Device):  ...  
+    axi_write('h08, 'hAAAAAAAA);
+    //axi_write('h08, 'h03020100);
+    #period;
+    axi_write('h08, 'hBBBBBBBB);
+    //axi_write('h08, 'h07060504);
+    #period;
+    axi_write('h08, 'hCCCCCCCC);
+    //axi_write('h08, 'h0b0a0908);
+    #period;
+    axi_write('h08, 'hDDDDDDDD);
+    //axi_write('h08, 'h0f0e0d0c);
+    #period;
+    axi_write('h08, 'hAAAAAAAA);
+    //axi_write('h08, 'h03020100);
+    #period;
+    axi_write('h08, 'hBBBBBBBB);
+    //axi_write('h08, 'h07060504);
+    #period;
+    axi_write('h08, 'hCCCCCCCC);
+    //axi_write('h08, 'h0b0a0908);
+    #period;
+    axi_write('h08, 'hDDDDDDDD);
+    //axi_write('h08, 'h0f0e0d0c);
+    #period;
+
+    // Wait KG_FIN
+    while(reg_status[2] == 0) begin
+       #period; 
+    end
+    #(period*10);
+    
+    // ------------------------------------------
+	// -- Phase 2: Encryption Something
+	// ------------------------------------------
+	// ENCRYPTION WITH SEED_1
+	/// TEST 1: Input Encryption (Device)  ->  00010203 04050607 08090A0B 0C0D0E0F
+	/// TEST 1: Input Encryption (CT-O)    ->  0f0e0d0c 0b0a0908 07060504 03020100 
+	/// TEST 1: Result Encryption (Device) ->  deae1a89 b07f6e26 246b3283 cef7b78c  
+	/// TEST 1: Result Encryption (CT-O)   ->  8cb7f7ce 83326b24 266e7fb0 891aaede
+    /* CARGAMOS FIFO_DATA_IN */
+    axi_write('h04, 'h00010203);
+    #period;
+    axi_write('h04, 'h04050607);
+    #period;
+    axi_write('h04, 'h08090A0B);
+    #period;
+    axi_write('h04, 'h0C0D0E0F);
+    #(period*10);
+    /* ACTIVAMOS ENCRIPTACIÓN */
+    axi_write('h0C, 'h00000001);
+    #period;
+    
+    // Wait ENCRYPT_FIN
+    while(reg_status[0] == 1) begin
+       #period; 
+    end
+    #(period*10);
+    
+    // ENCRYPTION WITH SEED_1
+	/// TEST 2: Input Encryption (Device)  ->  AAAAAAAA BBBBBBBB AAAAAAAA BBBBBBBB
+	/// TEST 2: Input Encryption (CT-O)    ->  BBBBBBBB AAAAAAAA BBBBBBBB AAAAAAAA
+	/// TEST 2: Result Encryption (Device) ->  ec37ecb9 92740bec 68a69ef7 e863935c
+	/// TEST 2: Result Encryption (CT-O)   ->  5c9363e8 f79ea668 ec0b7492 b9ec37ec
+    /* CARGAMOS FIFO_DATA_IN */
     axi_write('h04, 'hAAAAAAAA);
     #period;
     axi_write('h04, 'hBBBBBBBB);
     #period;
-    axi_write('h04, 'hCCCCCCCC);
+    axi_write('h04, 'hAAAAAAAA);
     #period;
-    axi_write('h04, 'hDDDDDDDD);
+    axi_write('h04, 'hBBBBBBBB);
+    #(period*10);
+    /* ACTIVAMOS ENCRIPTACIÓN */
+    axi_write('h0C, 'h00000001);
     #period;
-    axi_write('h04, 'hEEEEEEEE);
+    
+    // Wait ENCRYPT_FIN
+    while(reg_status[0] == 1) begin
+       #period; 
+    end
+    #(period*10);
+    
+    // ------------------------------------------
+	// -- Phase 3: Decryption Something
+	// ------------------------------------------
+		// DESENCRYPTION WITH SEED_1
+	/// TEST 3: Input Desencryption (Device)   ->  deae1a89 b07f6e26 246b3283 cef7b78c
+	/// TEST 3: Input Desencryption (CT-O)     ->  8cb7f7ce 83326b24 266e7fb0 891aaede 
+	/// TEST 3: Result Desencryption (Device)  ->  00010203 04050607 08090a0b 0c0d0e0f  
+	/// TEST 3: Result Desencryption (CT-O)    ->  0f0e0d0c 0b0a0908 07060504 03020100
+    /* CARGAMOS FIFO_DATA_IN */
+    axi_write('h04, 'hdeae1a89);
     #period;
-    axi_write('h04, 'hFFFFFFFF);
+    axi_write('h04, 'hb07f6e26);
     #period;
-//    axi_multi_write('h08);
+    axi_write('h04, 'h246b3283);
     #period;
+    axi_write('h04, 'hcef7b78c);
+    #(period*10);
+    /* ACTIVAMOS DESENCRIPTACIÓN */
+    axi_write('h0C, 'h00000002);
+    #period;
+    
+    // Wait ENCRYPT_FIN
+    while(reg_status[1] == 1) begin
+       #period; 
+    end
+    #(period*10);
+	$stop;
+	
+	// ------------------------------------------
+	// -- Phase 4: Read results from FIFO_OUT
+	// ------------------------------------------
     axi_read('h04);
     #(period);
     #(period);
@@ -367,7 +488,18 @@ begin
     #(period);
     axi_read('h04);
     #(period*5);
-    $stop;
+    #period;
+    axi_write('h04, 'hEEEEEEEE);
+    #period;
+    axi_write('h04, 'hFFFFFFFF);
+    #(period);
+    #(period);
+    #(period);
+    axi_read('h04);
+    #(period);
+    #(period);
+    #(period);
+    axi_read('h04);
 end
     
 endmodule

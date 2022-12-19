@@ -1,4 +1,3 @@
-
 `timescale 1 ns / 1 ps
 
 	module myip_axififo_v1 #
@@ -21,13 +20,11 @@
 	)
 	(
 		// Users to add ports here
-
-		// FIFO Control Signals
-		output wire wrreqFI,
-		output wire rdreqFI,
-		output wire wrreqFO,
-		output wire rdreqFO,
-		output wire [31:0] dataf,
+        
+        // Registers START
+		output wire [C_S00_AXI_DATA_WIDTH-1 : 0] s01_reg_status,
+		output wire [C_S00_AXI_DATA_WIDTH-1 : 0] s02_reg_control,
+		// Registers ENDS
 
 		// User ports ends
 		// Do not modify the ports beyond this line
@@ -140,11 +137,8 @@
 		.S_AXI_RREADY(s00_axi_rready),
 
 		// Add user logic here
-		.wrreqFI(wrreqFI),
-		.rdreqFI(rdreqFI),
-		.wrreqFO(wrreqFO),
-		.rdreqFO(rdreqFO),
-		.dataf(dataf)
+		.S_REG_STATUS(s01_reg_status),
+		.S_REG_CONTROL(s02_reg_control)
 		// User logic ends
 
 	);

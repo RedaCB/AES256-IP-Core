@@ -6,8 +6,8 @@
 		// Users to add parameters here
 
         // AES256_FIFO START
-		parameter integer C_S_FIFO_DATA_IN_WIDTH  = 32,
-		parameter integer C_S_FIFO_DATA_OUT_WIDTH = 32,
+		parameter integer C_S_FIFO_SEED_WIDTH     = 256,
+		parameter integer C_S_FIFO_DATA_WIDTH     = 128,
 		parameter integer C_S_FIFO_SIZE	          = 16,
 		// AES256_FIFO ENDS
 		
@@ -34,26 +34,10 @@
 	(
 		// Users to add ports here
 		
-		// AES256 FIFO START
-		/// FIFO_IN START
-		output S_FIFO_IN_EMPTY,
-		output S_FIFO_IN_FULL,
-		wire [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_IN_RDATA,
-		/// FIFO_IN ENDS
-
-		/// FIFO_OUT START
-        output S_FIFO_OUT_EMPTY,
-		output S_FIFO_OUT_FULL,
-		wire [C_S_AXI_DATA_WIDTH-1 : 0] S_FIFO_OUT_WDATA,
-		/// FIFO_OUT ENDS
-
-		// ILA: FIFO Control Signals START
-		output wire wrreqFI,
-		output wire rdreqFI,
-		output wire wrreqFO,
-		output wire rdreqFO,
-		output wire [31:0] dataf,
-		// ILA: FIFO Control Signals ENDS
+		// Registers START
+		output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_STATUS,
+		output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_CONTROL,
+		// Registers ENDS
 
 		// User ports ends
 		// Do not modify the ports beyond this line
@@ -199,7 +183,7 @@
 	reg  	axi_bvalid;
 	reg [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_araddr;
 	reg  	axi_arready;
-	wire [C_S_AXI_DATA_WIDTH-1 : 0] 	axi_rdata;
+	reg [C_S_AXI_DATA_WIDTH-1 : 0] 	axi_rdata;
 	reg [1 : 0] 	axi_rresp;
 	reg  	axi_rlast;
 	reg [C_S_AXI_RUSER_WIDTH-1 : 0] 	axi_ruser;
@@ -236,16 +220,47 @@
 	localparam integer ADDR_LSB = (C_S_AXI_DATA_WIDTH/32)+ 1;
 	localparam integer OPT_MEM_ADDR_BITS = 3;
 	localparam integer USER_NUM_MEM = 1;
-	//----------------------------------------------
-	//-- Signals for user logic memory space example
 	//------------------------------------------------
-	wire [OPT_MEM_ADDR_BITS:0] mem_address;
-	wire [USER_NUM_MEM-1:0] mem_select;
-	reg [C_S_AXI_DATA_WIDTH-1:0] mem_data_out[0 : USER_NUM_MEM-1];
-
-	genvar i;
-	genvar j;
-	genvar mem_byte_index;
+	//-- Signals for user logic STARTS
+	//------------------------------------------------
+    // AES256 START
+    /// REGISTERS START
+    reg [C_S_FIFO_DATA_WIDTH-1 : 0] register_status;
+    reg [C_S_FIFO_DATA_WIDTH-1 : 0] register_control;
+    wire regControl_wren;      // Señal para escribir en el REGISTRO CONTROL wr: write y en: enable
+    /// REGISTERS ENDS
+    
+    /// FIFO_SEED START
+    wire fifoSeed_wren;     // Señal para escribir en la memoria de FIFO SEED wr: write y en: enable
+    wire fifoSeed_empty;
+    wire fifoSeed_full;
+    wire [C_S_FIFO_SEED_WIDTH-1 : 0] fifoSeed_outData;
+    /// FIFO_SEED ENDS
+    
+    /// FIFO_IN START
+    wire fifoIn_wren;      // Señal para escribir en memoria de FIFO IN wr: write y en: enable
+    wire fifoIn_empty;
+    wire fifoIn_full;
+    wire [C_S_FIFO_DATA_WIDTH-1 : 0] fifoIn_outData;
+    /// FIFO_IN ENDS
+    
+    /// FIFO_OUT START
+    wire fifoOut_empty;     // Señal para escribir en la memoria de FIFO SEED wr: write y en: enable
+    wire fifoOut_full;
+    wire [C_S_AXI_DATA_WIDTH-1 : 0] fifoOut_outData;
+    /// FIFO_OUT ENDS
+    
+    /// DEVICE START
+    wire device_encFin;
+    wire device_decFin; 
+    wire device_kgFin;
+    wire [C_S_FIFO_DATA_WIDTH-1 : 0] device_outData;
+    /// DEVICE ENDS
+	// AES256 ENDS
+	
+	//------------------------------------------------
+	//-- Signals for user logic ENDS
+	//------------------------------------------------
 
 	// I/O Connections assignments
 
@@ -566,202 +581,355 @@
 	          axi_rvalid <= 1'b0;
 	        end            
 	    end
-	end    
-	// ------------------------------------------
-	// -- Example code to access user logic memory region
-	// ------------------------------------------
-    
-    /*
-	generate
-	  if (USER_NUM_MEM >= 1)
-	    begin
-	      assign mem_select  = 1;
-	      assign mem_address = (axi_arv_arr_flag? axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]:(axi_awv_awr_flag? axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB]:0));
-	    end
-	endgenerate
-	     
-	// implement Block RAM(s)
-	generate 
-	  for(i=0; i<= USER_NUM_MEM-1; i=i+1)
-	    begin:BRAM_GEN
-	      wire mem_rden;
-	      wire mem_wren;
-	
-	      assign mem_wren = axi_wready && S_AXI_WVALID ;
-	
-	      assign mem_rden = axi_arv_arr_flag ; //& ~axi_rvalid
-	     
-	      for(mem_byte_index=0; mem_byte_index<= (C_S_AXI_DATA_WIDTH/8-1); mem_byte_index=mem_byte_index+1)
-	      begin:BYTE_BRAM_GEN
-	        wire [8-1:0] data_in ;
-	        wire [8-1:0] data_out;
-	        reg  [8-1:0] byte_ram [0 : 15];
-	        integer  j;
-	     
-	        //assigning 8 bit data
-	        assign data_in  = S_AXI_WDATA[(mem_byte_index*8+7) -: 8];
-	        assign data_out = byte_ram[mem_address];
-	     
-	        always @( posedge S_AXI_ACLK )
-	        begin
-	          if (mem_wren && S_AXI_WSTRB[mem_byte_index])
-	            begin
-	              byte_ram[mem_address] <= data_in;
-	            end   
-	        end    
-	      
-	        always @( posedge S_AXI_ACLK )
-	        begin
-	          if (mem_rden)
-	            begin
-	              mem_data_out[i][(mem_byte_index*8+7) -: 8] <= data_out;
-	            end   
-	        end    
-	               
-	    end
-	  end       
-	endgenerate
-	//Output register or memory read data
-
-	always @( mem_data_out, axi_rvalid)
-	begin
-	  if (axi_rvalid) 
-	    begin
-	      // Read address mux
-	      axi_rdata <= mem_data_out[0];
-	    end   
-	  else
-	    begin
-	      axi_rdata <= 32'h00000000;
-	    end       
-	end    
-    */
+	end
     
 	// Add user logic here
 	
 	// ------------------------------------------
 	// -- Memory Addressing Start
 	// ------------------------------------------
-	reg fifo_in_active, fifo_out_active;
+	reg fifo_seed_addr_active, fifo_data_addr_active, reg_control_addr_active;
 
-	// BLOQUE PARA ACTIVAR ESCRITURA AXI4 -> FIFO_IN
+	// BLOQUE PARA ACTIVAR ESCRITURA AXI4 -> FIFO_SEED
 	always @(S_AXI_AWADDR) begin
+	   if (S_AXI_AWADDR == 6'h08) begin
+	       fifo_seed_addr_active = 1'b1;
+	   end else begin
+	       fifo_seed_addr_active = 1'b0;
+	   end
+	end
 	
+	//Posible fusion del Mapping Address para las FIFOS_DATA
+	// BLOQUE PARA ACTIVAR ESCRITURA AXI4 -> FIFO_DATA_IN
+	always @(S_AXI_AWADDR) begin
 	   if (S_AXI_AWADDR == 6'h04) begin
-	       fifo_in_active = 1'b1;
+	       fifo_data_addr_active = 1'b1;
 	   end else begin
-	       fifo_in_active = 1'b0;
+	       fifo_data_addr_active = 1'b0;
 	   end
-	
 	end
-
-	// BLOQUE PARA ACTIVAR ESCRITURA FIFO_OUT -> AXI4
+	// BLOQUE PARA ACTIVAR LECTUR Y ESCRITURA FIFO_DATA_OUT -> AXI4 
 	always @(S_AXI_ARADDR) begin
-	
-	   if (S_AXI_ARADDR == 'h04) begin
-	       fifo_out_active = 1'b1;
+	   if (S_AXI_ARADDR == 6'h04) begin
+	       reg_control_addr_active = 1'b1;
 	   end else begin
-	       fifo_out_active = 1'b0;
+	       reg_control_addr_active = 1'b0;
 	   end
+	end 
+
+	// BLOQUE PARA ACTIVAR REG_CONTROL -> DEVICE
+	always @(S_AXI_AWADDR) begin
+	   if (S_AXI_AWADDR == 6'h0C) begin
+	       reg_control_addr_active = 1'b1;
+	   end else begin
+	       reg_control_addr_active = 1'b0;
+	   end
+	end 
 	
-	end
 	// ------------------------------------------
 	// -- Memory Addressing Ends
 	// ------------------------------------------
 	
 
+    // ------------------------------------------
+	// -- REG_STATUS Start
+	/* --------- CONTROL REGISTER STRC ----------
+    *
+    *  0 - Encrypte_State
+    *  1 - Decrypte_State
+    *  2 - KG_State -> Cambiarlo, 1 indica que la llave esta generada, 0 indica que la llave no existe
+    *  3 - FIFO_IN_Full
+    *  4 - FIFO_OUT_Full
+    *  5 - FIFO_SEED_Full
+    *  6 - FIFO_IN_Empty
+    *  7 - FIFO_OUT_Empty
+    *  8 - FIFO_SEED_Empty
+    *  9
+    *  ...
+    *  31
+    *
+    *  ------------------------------------------*/
 	// ------------------------------------------
-	// -- FIFO Implementation Start
+    always @( posedge S_AXI_ACLK )
+	begin
+        if ( S_AXI_ARESETN == 1'b0 )
+            begin
+              register_status = 0;
+            end 
+          else
+            begin
+            
+            if(device_encFin)
+               register_status[0] <= 1'b0;
+               //start_encrytpion <= 1'b0;
+            
+            if(device_decFin)
+               register_status[1] <= 1'b0;
+               //start_decrytpion <= 1'b0;
+               
+            if(device_kgFin)
+               register_status[2] <= 1'b1;
+            
+            if (fifoIn_full) begin
+                //start_encrytpion <= 1'b1;
+                register_status[3] <= 1'b1; 
+            end
+            else begin
+                register_status[3] <= 1'b0;
+            end
+            
+            if (fifoOut_full) begin
+                //start_decrytpion <= 1'b1;
+                register_status[4] <= 1'b1; 
+            end
+            else begin
+                register_status[4] <= 1'b0;
+            end
+            
+            if (fifoSeed_full) begin
+                //start_key_generator <= 1'b1;
+                register_status[5] <= 1'b1;
+            end
+            else begin
+                register_status[5] <= 1'b0;
+            end
+
+        end
+    end
+    
+    assign S_REG_STATUS = register_status;
+    
+    // ------------------------------------------
+	// -- REG_STATUS Ends
 	// ------------------------------------------
-	reg mem_in_rden;       // Señal para leer en memoria de FIFO IN
-	reg mem_out_rden;     // Señal para leer en memoria de FIFO OUT
-    wire mem_in_wren;      // Señal para escribir en memoria de FIFO IN
-    reg mem_out_wren;      // Señal para escribir en memoria de FIFO OUT
+	
+	
+	
+	// ------------------------------------------
+	// -- REG_CONTROL Start
+	/* --------- CONTROL REGISTER STRC ----------
+    *
+    *  0 - Encrypte Active
+    *  1 - Decrypte Active
+    *  2 - KG_Force
+    *  3 - FIFO_IN_Flush
+    *  4 - FIFO_OUT_Flush
+    *  5 - FIFO_SEED_Flush
+    *  6
+    *  ...
+    *  31
+    *
+    *  ------------------------------------------*/
+	// ------------------------------------------	
+	wire start_key_generator;      // Registro para indicar inicio de generación de llaves
+	wire start_encrytpion;         // Registro para indicar inicio de encriptación
+	wire start_decrytpion;         // Registro para indicar inicio de desencriptación
+	wire flush_fifo_seed;          // Registro para indicar inicio acción de vaciar la FIFO_SEED	
+	
+	reg fifo_in_rden;     // Señal para leer en memoria de FIFO IN ¿Para que sirve? TODO rd: read y en: enable
+    reg fifo_out_wren;      // Señal para escribir en memoria de FIFO OUT wr: write y en: enable
+	reg fifo_out_rden;     // Registro para indicar inicio de lectura de FIFO_OUT
+	
+	assign regControl_wren = axi_wready && S_AXI_WVALID && reg_control_addr_active ;  // Bloque para controlar escritura en la FIFO_SEED
+	
+	always @( posedge S_AXI_ACLK )
+	begin
+        if ( S_AXI_ARESETN == 1'b0 )
+            begin
+              register_control <= 0;
+            end 
+          else
+            begin
+            
+            if (regControl_wren) begin
+                if (S_AXI_WDATA[0]) begin
+                   //start_encrytpion <= 1'b1;
+                   register_control[0] <= 1'b1; 
+                   register_status[0] <= 1'b1;
+                end
+                
+                if (S_AXI_WDATA[1]) begin
+                   //start_decrytpion <= 1'b1;
+                   register_control[1] <= 1'b1;
+                   register_status[1] <= 1'b1;
+                end
+            end
+
+            
+            if (fifoSeed_full) begin
+               //start_key_generator <= 1'b1;
+               register_control[2] <= 1'b1; 
+            end
     
-    assign mem_in_wren = axi_wready && S_AXI_WVALID && fifo_in_active ;
+            if(device_encFin)
+               register_control[0] <= 1'b0;
+               //start_encrytpion <= 1'b0;
+            
+            if(device_decFin)
+               register_control[1] <= 1'b0;
+               //start_decrytpion <= 1'b0;
+               
+            if(device_kgFin)
+               register_control[2] <= 1'b0;
+               //start_key_generator <= 1'b0;
+        end
+    end
     
-    // assign mem_out_rden = axi_arv_arr_flag ; //& ~axi_rvalid
-	      
+    assign S_REG_CONTROL = register_control;
+	
+	// ------------------------------------------
+	// -- REG_CONTROL Ends
+	// ------------------------------------------
+	
+	
+	
+	// ------------------------------------------
+	// -- FIFO_SEED Implementation Start
+	// ------------------------------------------
+    fifo_seed FIFO_SEED (
+	   .clk(S_AXI_ACLK),
+       .resetn(S_AXI_ARESETN),
+       .write_fifo(fifo_seed_wren),
+       .read_fifo(start_key_generator),
+       .data_in(S_AXI_WDATA),
+       .data_out(fifoSeed_outData),
+       .empty_fifo(fifoSeed_empty),
+       .full_fifo(fifoSeed_full)
+	);
+	
+	assign fifo_seed_wren = axi_wready && S_AXI_WVALID && fifo_seed_addr_active ;  // Bloque para controlar escritura en la FIFO_SEED
+	
+	// ------------------------------------------
+	// -- FIFO_SEED Implementation Ends
+	// ------------------------------------------
+	
+
+	
+	// ------------------------------------------
+	// -- FIFOs_DATA Implementation Start
+	// ------------------------------------------
 	fifo_data_in FIFO_DATA_IN_1(
         .clk(S_AXI_ACLK),
         .resetn(S_AXI_ARESETN),
-        .write_fifo(mem_in_wren),
-        .read_fifo(mem_in_rden),
+        .write_fifo(fifoIn_wren),
+        .read_fifo(fifo_in_rden),
         .data_in(S_AXI_WDATA),
-        .data_out(S_FIFO_IN_RDATA),
-        .empty_fifo(S_FIFO_IN_EMPTY),
-        .full_fifo(S_FIFO_IN_FULL)
+        .data_out(fifoIn_outData),
+        .empty_fifo(fifoIn_empty),
+        .full_fifo(fifoIn_full)
     );
 	
-	assign wrreqFI = mem_in_wren;
-	assign rdreqFI = mem_in_rden;
-	assign wrreqFO = mem_out_wren;
-	assign rdreqFO = axi_rvalid;
-	assign dataf = S_FIFO_IN_RDATA;
-		    
     fifo_data_out FIFO_DATA_OUT_1(
         .clk(S_AXI_ACLK),
         .resetn(S_AXI_ARESETN),
-        .write_fifo(mem_out_wren),
-        .read_fifo(axi_rvalid),
-        .data_in(S_FIFO_IN_RDATA),
-        .data_out(S_FIFO_OUT_WDATA),
-        .empty_fifo(S_FIFO_OUT_EMPTY),
-        .full_fifo(S_FIFO_OUT_FULL)
+        .write_fifo(fifo_out_wren), // Register para indicar cuando escribe dato de DEVICE a FIFO_OUT
+        .read_fifo(fifo_out_rden),
+        .data_in(device_outData),
+        .data_out(fifoOut_outData),
+        .empty_fifo(fifoOut_empty),
+        .full_fifo(fifoOut_full)
     );
-	/* Fifo Read generation. This is valid only for single accesses
-    always @(posedge S_AXI_ACLK) begin
-        if ( S_AXI_ARESETN == 1'b0 ) begin   
-			read_fifo_out <= 1'b0;
-	   	end
-	   	else begin
-			if (axi_rvalid ==1'b1 && */
-		
-	// Bloque para controlar señales en la FIFO IN -> OUT
-    always @(posedge S_AXI_ACLK) begin
     
-        if ( S_AXI_ARESETN == 1'b0 ) begin
-            mem_in_rden  <= 0;
-            mem_out_wren <= 0;
-        end 
-        else begin
-            mem_out_wren = mem_in_rden;
-            mem_in_rden  = ~S_FIFO_IN_EMPTY && ~mem_in_rden ;
+    assign fifoIn_wren = axi_wready && S_AXI_WVALID && fifo_data_addr_active ;     // Bloque para controlar escritura en la FIFO_IN  
+    
+    // TODO: Improve
+    // Bloque para controlar lectura de la FIFO_IN
+    always @( posedge register_control[0], posedge register_control[1] )
+	begin
+        if (S_AXI_ARESETN == 1'b0) begin
+            // Estado inicial
+            //fifo_in_rden <= 0;
+        end else begin
+            if ((register_control[0] || register_control[1]) && ~fifo_in_rden) begin
+                fifo_in_rden <= 'b1; //TODO: Hacer que dure un ciclo de reloj
+            end else begin
+                fifo_in_rden <= 1'b0;
+            end
         end
-    
     end
     
-    // Bloque para controlar lectura en la FIFO OUT
-    always @(posedge S_AXI_ACLK) begin
+    // TODO: Improve
+    // Bloque para controlar escritura en la FIFO_OUT
+    always @( negedge register_control[0], negedge register_control[1] )
+	begin
+        if (S_AXI_ARESETN == 1'b0) begin
+            // Estado inicial
+            //fifo_in_rden <= 0;
+        end else begin
+            if ((register_control[0] == 1'b0 || register_control[1] == 1'b0) && ~fifo_out_wren) begin
+                fifo_out_wren <= 'b1; //TODO: Hacer que dure un ciclo de reloj
+            end else begin
+                fifo_out_wren <= 1'b0;
+            end
+        end
+    end
     
+    // TODO: Mejorable
+    // Bloque para controlar lectura de la FIFO_OUT: fifo_out_rden
+    // Bloque para controlar lectura de la FIFO_IN: fifo_in_rden
+    // Bloque para controlar escritura en la FIFO_OUT: fifo_out_wren
+    always @(posedge S_AXI_ACLK) begin
+
         if ( S_AXI_ARESETN == 1'b0 ) begin
-            mem_out_rden <= 0;
+            fifo_out_rden <= 0;
+            fifo_in_rden <= 0;
+            fifo_out_wren <= 0;
         end 
         else begin
-            mem_out_rden = axi_arv_arr_flag && axi_rvalid && ~mem_out_rden ;
+            fifo_out_rden = axi_arv_arr_flag && axi_rvalid && ~fifo_out_rden ;
+            if (fifo_in_rden) begin
+                fifo_in_rden <= 'b0; //TODO: Hacer que dure un ciclo de reloj
+            end
+            if (fifo_out_wren) begin
+                fifo_out_wren <= 'b0; //TODO: Hacer que dure un ciclo de reloj
+            end
         end
-    
+
 	end
 
-	// Bloque para controlar salida al BUS AXI
-	assign axi_rdata = S_FIFO_OUT_WDATA;
-	/*    
-	always @(mem_out_rden, fifo_out_active, fifo_out_active)
+	// TODO: Bloque para controlar salida al BUS AXI
+	always @(axi_rvalid)
 	begin
-	  	if (mem_out_rden && fifo_out_active) 
+	  if (axi_rvalid) 
 	    begin
-	      	// Read address mux
-	      	axi_rdata <= S_FIFO_OUT_WDATA;
+	      // Read address mux
+	      axi_rdata <= fifoOut_outData;
 	    end   
-	  	else
+	  else
 	    begin
-	      	axi_rdata <= 32'h00000000;
+	      axi_rdata <= 32'h00000000; // TODO - Lo dejamos?
 	    end       
 	end
-	*/
+		
 	// ------------------------------------------
-	// -- FIFO Implementation Ends
+	// -- FIFOs_DATA Implementation Ends
 	// ------------------------------------------
+	
+	
+	
+	// ------------------------------------------
+	// -- Device AES-256 Implementation Start
+	// ------------------------------------------	
+	AES256_device DEVICE_AES256 (
+        .clk(S_AXI_ACLK),
+        .resetn(S_AXI_ARESETN),
+        .seed(fifoSeed_outData),            // Salida de la FIFO_SEED: Datos que entran para generar la llave de encriptación
+        // .datakey_in(),      // TODO - Que es esto? Indica al dispositivo cuando entran datos mediante el Input Device
+        .inp_device(fifoIn_outData),   // Salida de la FIFO_IN: Datos que entran para encriptarse
+        .ctrl_dataIn(S_REG_CONTROL),     // TODO - Que es esto? ARRAY [1:0] Indica al dispositivo cuando entran datos mediante el Input Device, para ctrl_dataIn[0] = 1 activa Encrypter, ctrl_dataIn[1] = 1 activa desencrypter y ctrl_dataIn[2] = 1 activa key_gen
+        //.mod_en(2'b00),       // TODO - Que es esto? Indica si el modo es encrypt o decrypt??
+        .enc_fin(device_encFin),  // Indica final de encriptación
+        .dec_fin(device_decFin),  // Indica final de decriptación
+        .kg_fin(device_kgFin),    // Indica final de generación de llaves
+        .outp_device(device_outData) // Entrada de la FIFO_OUT: Datos de salida del device que van a la FIFO_OUT
+        // .mod_decrease(),    // TODO - Que es esto? - Decrementar la FIFO de entrada
+        // .data_debug()       // TODO - Que es esto? - Para ver los datos que pasan por el device
+    );
+    
+	// ------------------------------------------
+	// -- Device AES-256 Implementation Ends
+	// ------------------------------------------
+	
 	// User logic ends
 
 endmodule

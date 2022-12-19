@@ -19,8 +19,8 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-`define FIFO_SZ 4
-`define FIFO_DATA_IN_WH 32
+`define FIFO_SZ 64
+`define FIFO_DATA_IN_WH 128
 `define FIFO_DATA_OUT_WH 32
 
 module fifo_data_out(
@@ -51,7 +51,10 @@ assign full_fifo  = (counter_fifo == `FIFO_SZ) ? 1'b1 : 1'b0;
 // Write BLOCK
 always @(posedge clk) begin: write
     if (write_fifo == 1'b1 && full_fifo == 1'b0) begin
-        memory_fifo[write_ptr] <= data_in;
+        memory_fifo[write_ptr + 3] = data_in[(0*`FIFO_DATA_OUT_WH) +: `FIFO_DATA_OUT_WH];
+        memory_fifo[write_ptr + 2] = data_in[(1*`FIFO_DATA_OUT_WH) +: `FIFO_DATA_OUT_WH];
+        memory_fifo[write_ptr + 1] = data_in[(2*`FIFO_DATA_OUT_WH) +: `FIFO_DATA_OUT_WH];
+        memory_fifo[write_ptr + 0] = data_in[(3*`FIFO_DATA_OUT_WH) +: `FIFO_DATA_OUT_WH];
     end
 end
 
@@ -64,11 +67,12 @@ always @(posedge clk) begin: pointer_w
     else begin
         // Estado de trabajo
         if (write_fifo == 1'b1 && full_fifo == 1'b0) begin 
-            write_ptr <= (write_ptr == `FIFO_SZ - 1) ? 0 : write_ptr + 1;
+            write_ptr <= (write_ptr == `FIFO_SZ - 1) ? 0 : write_ptr + 4;
         end
         //write_ptr <= (write_fifo == 1'b1 && full_fifo == 1'b0 && counter_fifo == `FIFO_SZ) ? 0 : write_ptr;
     end
 end
+
 
 // Read BLOCK
 assign data_out = memory_fifo[read_ptr];
@@ -80,7 +84,7 @@ always @(posedge read_fifo) begin: read
 end
 */
 
-// Pointer Read BLOCK
+// Pointer Read BLOCK: Hay que adaptar este BLOQUE
 always @(posedge clk) begin: pointer_r
     if (resetn == 1'b0) begin
         // Estado inicial
@@ -96,7 +100,7 @@ always @(posedge clk) begin: pointer_r
     end
 end
 
-// Counter BLOCK
+// Counter BLOCK: Creo que ya no sirve de nada este BLOQUE
 always @(posedge clk) begin: counter
     if (resetn == 1'b0) begin
         // Estado inicial
@@ -107,7 +111,7 @@ always @(posedge clk) begin: counter
         case ({write_fifo, read_fifo})
             2'b00   : counter_fifo <= counter_fifo;
             2'b01   : counter_fifo <= (counter_fifo == 0) ? 0 : counter_fifo - 1;
-            2'b10   : counter_fifo <= (counter_fifo == `FIFO_SZ) ? `FIFO_SZ : counter_fifo + 1;
+            2'b10   : counter_fifo <= (counter_fifo == `FIFO_SZ) ? `FIFO_SZ : counter_fifo + 4;
             2'b11   : counter_fifo <= counter_fifo;
             default : counter_fifo <= counter_fifo;
         endcase
