@@ -1,4 +1,3 @@
-
 `timescale 1 ns / 1 ps
 
 	module myip_axififo_v1_S00_AXI #
@@ -35,8 +34,8 @@
 		// Users to add ports here
 		
 		// Registers START
-		output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_STATUS,
-		output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_CONTROL,
+		output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_STATUS,  // Retirar Output en PROD (se usa para TB)
+		output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_CONTROL, // Retirar Output en PROD (se usa para TB)
 		// Registers ENDS
 
 		// User ports ends
@@ -588,8 +587,26 @@
 	// ------------------------------------------
 	// -- Memory Addressing Start
 	// ------------------------------------------
-	reg fifo_seed_addr_active, fifo_data_addr_active, reg_control_addr_active;
+	reg fifo_seed_addr_active, fifo_data_addr_active, reg_control_addr_active, reg_status_addr_active;
 
+    // BLOQUE PARA ACTIVAR REG_STATUS -> AXI4 
+	always @(S_AXI_ARADDR) begin
+	   if (S_AXI_ARADDR == 6'h10) begin
+	       reg_status_addr_active = 1'b1;
+	   end else begin
+	       reg_status_addr_active = 1'b0;
+	   end
+	end 
+
+	// BLOQUE PARA ACTIVAR AXI4 -> REG_CONTROL
+	always @(S_AXI_AWADDR) begin
+	   if (S_AXI_AWADDR == 6'h0C) begin
+	       reg_control_addr_active = 1'b1;
+	   end else begin
+	       reg_control_addr_active = 1'b0;
+	   end
+	end 
+	
 	// BLOQUE PARA ACTIVAR ESCRITURA AXI4 -> FIFO_SEED
 	always @(S_AXI_AWADDR) begin
 	   if (S_AXI_AWADDR == 6'h08) begin
@@ -615,16 +632,7 @@
 	   end else begin
 	       reg_control_addr_active = 1'b0;
 	   end
-	end 
-
-	// BLOQUE PARA ACTIVAR REG_CONTROL -> DEVICE
-	always @(S_AXI_AWADDR) begin
-	   if (S_AXI_AWADDR == 6'h0C) begin
-	       reg_control_addr_active = 1'b1;
-	   end else begin
-	       reg_control_addr_active = 1'b0;
-	   end
-	end 
+	end
 	
 	// ------------------------------------------
 	// -- Memory Addressing Ends
@@ -661,17 +669,14 @@
             
             if(device_encFin)
                register_status[0] <= 1'b0;
-               //start_encrytpion <= 1'b0;
             
             if(device_decFin)
                register_status[1] <= 1'b0;
-               //start_decrytpion <= 1'b0;
                
             if(device_kgFin)
                register_status[2] <= 1'b1;
             
             if (fifoIn_full) begin
-                //start_encrytpion <= 1'b1;
                 register_status[3] <= 1'b1; 
             end
             else begin
@@ -679,7 +684,6 @@
             end
             
             if (fifoOut_full) begin
-                //start_decrytpion <= 1'b1;
                 register_status[4] <= 1'b1; 
             end
             else begin
@@ -687,7 +691,6 @@
             end
             
             if (fifoSeed_full) begin
-                //start_key_generator <= 1'b1;
                 register_status[5] <= 1'b1;
             end
             else begin
@@ -722,13 +725,10 @@
     *  ------------------------------------------*/
 	// ------------------------------------------	
 	wire start_key_generator;      // Registro para indicar inicio de generación de llaves
-	wire start_encrytpion;         // Registro para indicar inicio de encriptación
-	wire start_decrytpion;         // Registro para indicar inicio de desencriptación
-	wire flush_fifo_seed;          // Registro para indicar inicio acción de vaciar la FIFO_SEED	
 	
-	reg fifo_in_rden;     // Señal para leer en memoria de FIFO IN ¿Para que sirve? TODO rd: read y en: enable
-    reg fifo_out_wren;      // Señal para escribir en memoria de FIFO OUT wr: write y en: enable
-	reg fifo_out_rden;     // Registro para indicar inicio de lectura de FIFO_OUT
+	reg fifo_in_rden;       // Señal para leer en memoria de FIFO_IN        ->  rd: read y en: enable
+    reg fifo_out_wren;      // Señal para escribir en memoria de FIFO_OUT   ->  wr: write y en: enable
+	reg fifo_out_rden;      // Registro para indicar inicio de lectura de FIFO_OUT
 	
 	assign regControl_wren = axi_wready && S_AXI_WVALID && reg_control_addr_active ;  // Bloque para controlar escritura en la FIFO_SEED
 	
@@ -741,37 +741,32 @@
           else
             begin
             
-            if (regControl_wren) begin
-                if (S_AXI_WDATA[0]) begin
-                   //start_encrytpion <= 1'b1;
-                   register_control[0] <= 1'b1; 
-                   register_status[0] <= 1'b1;
-                end
-                
-                if (S_AXI_WDATA[1]) begin
-                   //start_decrytpion <= 1'b1;
-                   register_control[1] <= 1'b1;
-                   register_status[1] <= 1'b1;
-                end
+            // ENCRYPTION Control
+            if (S_AXI_WDATA[0] && regControl_wren) begin
+               register_control[0] <= 1'b1; 
+               register_status[0] <= 1'b1; // TODO: Mejorable, hay que sacar esto de aquí
+            end else begin
+                if(device_encFin)
+                    register_control[0] <= 1'b0;
             end
-
             
-            if (fifoSeed_full) begin
-               //start_key_generator <= 1'b1;
-               register_control[2] <= 1'b1; 
+            // DESENCRYPTION Control
+            if (S_AXI_WDATA[1] && regControl_wren) begin
+                register_control[1] <= 1'b1;
+                register_status[1] <= 1'b1; // TODO: Mejorable, hay que sacar esto de aquí
+            end else begin
+                if(device_decFin)
+                    register_control[1] <= 1'b0;
             end
-    
-            if(device_encFin)
-               register_control[0] <= 1'b0;
-               //start_encrytpion <= 1'b0;
             
-            if(device_decFin)
-               register_control[1] <= 1'b0;
-               //start_decrytpion <= 1'b0;
-               
-            if(device_kgFin)
-               register_control[2] <= 1'b0;
-               //start_key_generator <= 1'b0;
+            // KG Control
+            if (fifoSeed_full) begin // Automatizado FIFO_SEED Full
+                register_control[2] <= 1'b1;
+            end
+            else begin
+                if(device_kgFin)
+                    register_control[2] <= 1'b0;
+            end
         end
     end
     
@@ -790,7 +785,7 @@
 	   .clk(S_AXI_ACLK),
        .resetn(S_AXI_ARESETN),
        .write_fifo(fifo_seed_wren),
-       .read_fifo(start_key_generator),
+       .read_fifo(start_key_generator), // TODO: No se utiliza de momento
        .data_in(S_AXI_WDATA),
        .data_out(fifoSeed_outData),
        .empty_fifo(fifoSeed_empty),
@@ -832,67 +827,55 @@
     
     assign fifoIn_wren = axi_wready && S_AXI_WVALID && fifo_data_addr_active ;     // Bloque para controlar escritura en la FIFO_IN  
     
-    // TODO: Improve
+    reg enc_pos_d, dec_pos_d;
     // Bloque para controlar lectura de la FIFO_IN
-    always @( posedge register_control[0], posedge register_control[1] )
+    always @( posedge S_AXI_ACLK )
 	begin
         if (S_AXI_ARESETN == 1'b0) begin
-            // Estado inicial
-            //fifo_in_rden <= 0;
+            fifo_in_rden <= 0;
         end else begin
-            if ((register_control[0] || register_control[1]) && ~fifo_in_rden) begin
-                fifo_in_rden <= 'b1; //TODO: Hacer que dure un ciclo de reloj
+            enc_pos_d <= register_control[0];
+            dec_pos_d <= register_control[1];
+            if ((register_control[0] == 1 && enc_pos_d == 0) || (register_control[1] == 1 && dec_pos_d == 0)) begin
+                fifo_in_rden <= 1'b1; //Dura un ciclo de reloj por cada vez que se levanta la senyla de enc o dec
             end else begin
                 fifo_in_rden <= 1'b0;
             end
         end
     end
     
-    // TODO: Improve
+    reg enc_neg_d, dec_neg_d;
     // Bloque para controlar escritura en la FIFO_OUT
-    always @( negedge register_control[0], negedge register_control[1] )
+    always @( posedge S_AXI_ACLK )
 	begin
         if (S_AXI_ARESETN == 1'b0) begin
-            // Estado inicial
-            //fifo_in_rden <= 0;
+            fifo_in_rden <= 0;
         end else begin
-            if ((register_control[0] == 1'b0 || register_control[1] == 1'b0) && ~fifo_out_wren) begin
-                fifo_out_wren <= 'b1; //TODO: Hacer que dure un ciclo de reloj
+            enc_neg_d <= register_control[0];
+            dec_neg_d <= register_control[1];
+            if ((register_control[0] == 0 && enc_neg_d == 1) || (register_control[1] == 0 && dec_neg_d == 1)) begin
+                fifo_out_wren <= 1'b1; //Dura un ciclo de reloj por cada vez que se levanta la senyla de enc o dec
             end else begin
                 fifo_out_wren <= 1'b0;
             end
         end
     end
     
-    // TODO: Mejorable
     // Bloque para controlar lectura de la FIFO_OUT: fifo_out_rden
-    // Bloque para controlar lectura de la FIFO_IN: fifo_in_rden
-    // Bloque para controlar escritura en la FIFO_OUT: fifo_out_wren
     always @(posedge S_AXI_ACLK) begin
-
         if ( S_AXI_ARESETN == 1'b0 ) begin
             fifo_out_rden <= 0;
-            fifo_in_rden <= 0;
-            fifo_out_wren <= 0;
         end 
         else begin
             fifo_out_rden = axi_arv_arr_flag && axi_rvalid && ~fifo_out_rden ;
-            if (fifo_in_rden) begin
-                fifo_in_rden <= 'b0; //TODO: Hacer que dure un ciclo de reloj
-            end
-            if (fifo_out_wren) begin
-                fifo_out_wren <= 'b0; //TODO: Hacer que dure un ciclo de reloj
-            end
         end
-
 	end
 
-	// TODO: Bloque para controlar salida al BUS AXI
+	// Bloque para controlar salida al BUS AXI
 	always @(axi_rvalid)
 	begin
 	  if (axi_rvalid) 
 	    begin
-	      // Read address mux
 	      axi_rdata <= fifoOut_outData;
 	    end   
 	  else
@@ -916,7 +899,7 @@
         .seed(fifoSeed_outData),            // Salida de la FIFO_SEED: Datos que entran para generar la llave de encriptación
         // .datakey_in(),      // TODO - Que es esto? Indica al dispositivo cuando entran datos mediante el Input Device
         .inp_device(fifoIn_outData),   // Salida de la FIFO_IN: Datos que entran para encriptarse
-        .ctrl_dataIn(S_REG_CONTROL),     // TODO - Que es esto? ARRAY [1:0] Indica al dispositivo cuando entran datos mediante el Input Device, para ctrl_dataIn[0] = 1 activa Encrypter, ctrl_dataIn[1] = 1 activa desencrypter y ctrl_dataIn[2] = 1 activa key_gen
+        .ctrl_dataIn(S_REG_CONTROL),     // ARRAY [1:0] Indica al dispositivo cuando entran datos mediante el Input Device, para ctrl_dataIn[0] = 1 activa Encrypter, ctrl_dataIn[1] = 1 activa desencrypter y ctrl_dataIn[2] = 1 activa key_gen
         //.mod_en(2'b00),       // TODO - Que es esto? Indica si el modo es encrypt o decrypt??
         .enc_fin(device_encFin),  // Indica final de encriptación
         .dec_fin(device_decFin),  // Indica final de decriptación
