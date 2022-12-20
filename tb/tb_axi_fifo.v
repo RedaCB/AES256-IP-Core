@@ -23,7 +23,7 @@
 module tb_axi_fifo();
 
 // Local Parameters
-localparam period = 10; // Duration for each bit = period * timescale = period * 1ns = 20ns
+localparam period = 10; // Duration for each bit = period * timescale = period * 1ns = 10ns
 reg clk, resetn;
 
 
@@ -121,8 +121,7 @@ myip_axififo_v1 UUT(
 );
 
 // Clock
-always 
-begin
+always begin
     clk = 1'b1; 
     #(period/2); // high for period * timescale = 20 ns
 
@@ -130,42 +129,44 @@ begin
     #(period/2); // low for period * timescale = 20 ns
 end
 
+// Set initial state
 task initialState;
-//always
-begin 
-    // Write Channels
-    addrw_valid <= 1'b0;
-    addrw_numTranfers = 8'b00000000;
-    addrw_size <= 3'b000;
-    addrw_burst <= 2'b00;
-    addrw_id <= 1'b0;
-    
-    dataw_valid <= 1'b0;
-    dataw_last <= 1'b0;
-    
-    respw_ready = 1'b0;
-    
-    // Read Channels
-    addrr_addr <= 'h00;
-    addrr_len <= 1'b0;
-    addrr_size <= 1'b0;
-    addrr_burst <= 1'b0;
-    addrr_valid <= 1'b0;
-    
-    datar_ready <= 1'b1;
-    
-end
+    begin 
+        // Write Channels
+        addrw_valid <= 1'b0;
+        addrw_numTranfers = 8'b00000000;
+        addrw_size <= 3'b000;
+        addrw_burst <= 2'b00;
+        addrw_id <= 1'b0;
+        
+        dataw_valid <= 1'b0;
+        dataw_last <= 1'b0;
+        
+        respw_ready = 1'b0;
+        
+        // Read Channels
+        addrr_addr <= 'h00;
+        addrr_len <= 1'b0;
+        addrr_size <= 1'b0;
+        addrr_burst <= 1'b0;
+        addrr_valid <= 1'b0;
+        
+        datar_ready <= 1'b1;
+        
+    end
 endtask
 
+// Set enable reset
 task enableResetn;
-begin
-    #period;
-    @(posedge clk)
-    resetn = 1'b1;
-    #period;
-end
+    begin
+        #period;
+        @(posedge clk)
+        resetn = 1'b1;
+        #period;
+    end
 endtask
 
+// Task for write on AXI4 Full
 task axi_write(
     input [5:0] i_addr,
     input [31:0] i_data
@@ -186,9 +187,7 @@ task axi_write(
         addrw_valid <= 1'b0;
         addrw_valid <= 1'b0;
         addrw_id <= 1'b0;
-        #period;
-        #period;
-        #period;
+        #(period*3);
         dataw_valid <= 1'b1;
         dataw_data  <= i_data;
         dataw_last <= 1'b1;
@@ -204,132 +203,23 @@ task axi_write(
         dataw_valid <= 1'b0;
 
     end
- /*   begin
-        // Send Data of Write
-        while (addrw_ready == 1'b0) begin 
-            #period;
-        end
-        if (addrw_ready) begin
-            addrw_valid <= 1'b0;
-            addrw_id <= 1'b0;
-            dataw_valid <= 1'b1;
-            dataw_data  <= i_data;
-            dataw_last <= 1'b1;
-            dataw_flash <= 4'b0001;
-            #period;
-            dataw_flash <= 'h0;
-            dataw_valid <= 1'b0;
-            respw_ready <= 1'b0;
-            dataw_last <= 1'b0;
-            // Check Response of Write
-            //while (dataw_ready == 1'b0) begin 
-            #period;
-            //end
-            if (dataw_ready) begin
-                
-                respw_ready <= 1'b1;
-                #period;
-                while (respw_valid == 1'b0) begin 
-                    #period;
-                end
-                if (respw_valid) begin
-                    #period;
-
-                end
-            end
-        end    
-    end
-    join */
 endtask
 
-
-
-
-
-task axi_multi_write(
-    input [5:0] i_addr
-);
-fork : f
-    begin
-        // Configure Address of Write
-        #period;
-         addrw_id <= 1'b1;
-         addrw_valid <= 1'b1;
-         addrw_addr  <= i_addr;
-         addrw_numTranfers <= 'h03;
-         addrw_size <= 3'b010;
-         addrw_burst <= 2'b01;
-         #period;
-    end
-    begin
-        // Send Data of Write
-         @(posedge addrw_ready);
-         #period;
-             
-            addrw_valid <= 1'b0;
-            addrw_id <= 1'b0;
-            dataw_valid <= 1'b1;
-            dataw_flash <= 'h1;
-            dataw_data  <= 'hABABABAB;
-            #period;
-            #period;
-            //#period;
-            #period;
-            dataw_data  <= 'hCDCDCDCD;
-            #period;
-            //#period;
-            #period;
-            dataw_data  <= 'hEFEFEFEF;
-            //#period;
-            #period;
-            #period;
-            dataw_last <= 1'b1;
-            
-         
-         #period;
-	 #period;
-         // Check Response of Write
-         //if(dataw_ready == 1'b1) begin
-         
-         //   #period;
-         //   respw_ready <= 1'b1;
-         //   #period;
-         //end
-         
-         if(dataw_ready == 1'b1) begin
-         
-            //#period;
-            dataw_last <= 1'b0;
-            dataw_valid <= 1'b0;
-            respw_ready <= 1'b0;
-            dataw_flash <= 'h0;
-            #period;
-         end
-    end
-    join
-endtask
-
+// Task for read on AXI4 Full
 task axi_read(
     input [5:0] i_addr
 );
     begin
         // Configure Address of Read
         #period;
-        //addrw_id = 2'b11;
         addrr_valid <= 1'b1;
         addrr_addr <= i_addr;
-        //addrr_burst <= 2'b00;
         #(period*2);
-        //while (datar_valid == 1'b0) begin 
-        //    #period;
-        //end
- //       if (datar_valid) begin
         addrr_valid <= 1'b0;
         #period;
         datar_ready <= 1'b1;
         #period;
         datar_ready <= 1'b0;
-        //end
     end
 endtask
 
@@ -471,35 +361,19 @@ begin
 	// -- Phase 4: Read results from FIFO_OUT
 	// ------------------------------------------
     axi_read('h04);
-    #(period);
-    #(period);
-    #(period);
+    #(period*3);
     axi_read('h04);
-    #(period);
-    #(period);
-    #(period);
+    #(period*3);
     axi_read('h04);
-    #(period);
-    #(period);
-    #(period);
+    #(period*3);
     axi_read('h04);
-    #(period);
-    #(period);
-    #(period);
+    #(period*3);
     axi_read('h04);
-    #(period*5);
-    #period;
-    axi_write('h04, 'hEEEEEEEE);
-    #period;
-    axi_write('h04, 'hFFFFFFFF);
-    #(period);
-    #(period);
-    #(period);
+    #(period*3);
     axi_read('h04);
-    #(period);
-    #(period);
-    #(period);
+    #(period*3);
     axi_read('h04);
+    #(period*10);
 end
     
 endmodule
