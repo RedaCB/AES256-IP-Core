@@ -34,8 +34,8 @@
 		// Users to add ports here
 		
 		// Registers START
-		output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_STATUS,  // Retirar Output en PROD (se usa para TB)
-		output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_CONTROL, // Retirar Output en PROD (se usa para TB)
+		/*output*/ wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_STATUS,  // Retirar Output en PROD (se usa para TB)
+		/*output*/ wire [C_S_AXI_DATA_WIDTH-1 : 0] S_REG_CONTROL, // Retirar Output en PROD (se usa para TB)
 		// Registers ENDS
 
 		// User ports ends
@@ -587,16 +587,8 @@
 	// ------------------------------------------
 	// -- Memory Addressing Start
 	// ------------------------------------------
-	reg fifo_seed_addr_active, fifo_data_addr_active, reg_control_addr_active, reg_status_addr_active;
-
-    // BLOQUE PARA ACTIVAR REG_STATUS -> AXI4 
-	always @(S_AXI_ARADDR) begin
-	   if (S_AXI_ARADDR == 6'h10) begin
-	       reg_status_addr_active = 1'b1;
-	   end else begin
-	       reg_status_addr_active = 1'b0;
-	   end
-	end 
+	// TODO: Quitar este bloque y poner directamente en la parte correspondiente o sustituir por un multiplexor
+	reg fifo_seed_addr_active, fifo_dataIN_addr_active, reg_control_addr_active;
 
 	// BLOQUE PARA ACTIVAR AXI4 -> REG_CONTROL
 	always @(S_AXI_AWADDR) begin
@@ -620,17 +612,9 @@
 	// BLOQUE PARA ACTIVAR ESCRITURA AXI4 -> FIFO_DATA_IN
 	always @(S_AXI_AWADDR) begin
 	   if (S_AXI_AWADDR == 6'h04) begin
-	       fifo_data_addr_active = 1'b1;
+	       fifo_dataIN_addr_active = 1'b1;
 	   end else begin
-	       fifo_data_addr_active = 1'b0;
-	   end
-	end
-	// BLOQUE PARA ACTIVAR LECTUR Y ESCRITURA FIFO_DATA_OUT -> AXI4 
-	always @(S_AXI_ARADDR) begin
-	   if (S_AXI_ARADDR == 6'h04) begin
-	       reg_control_addr_active = 1'b1;
-	   end else begin
-	       reg_control_addr_active = 1'b0;
+	       fifo_dataIN_addr_active = 1'b0;
 	   end
 	end
 	
@@ -660,41 +644,62 @@
 	// ------------------------------------------
     always @( posedge S_AXI_ACLK )
 	begin
-        if ( S_AXI_ARESETN == 1'b0 )
-            begin
+        if ( S_AXI_ARESETN == 1'b0 ) begin
               register_status = 0;
-            end 
-          else
-            begin
+        end else begin
+            // ENCRYPTION Status
+            if (S_AXI_WDATA[0] && regControl_wren) begin
+               register_status[0] <= 1'b1;
+            end else begin
+                if(device_encFin)
+                    register_status[0] <= 1'b0;
+            end
             
-            if(device_encFin)
-               register_status[0] <= 1'b0;
-            
-            if(device_decFin)
-               register_status[1] <= 1'b0;
+            // DESENCRYPTION Status
+            if (S_AXI_WDATA[1] && regControl_wren) begin
+                register_status[1] <= 1'b1;
+            end else begin
+                if(device_decFin)
+                    register_status[1] <= 1'b0;
+            end
                
             if(device_kgFin)
                register_status[2] <= 1'b1;
             
             if (fifoIn_full) begin
                 register_status[3] <= 1'b1; 
-            end
-            else begin
+            end else begin
                 register_status[3] <= 1'b0;
             end
             
             if (fifoOut_full) begin
                 register_status[4] <= 1'b1; 
-            end
-            else begin
+            end else begin
                 register_status[4] <= 1'b0;
             end
             
             if (fifoSeed_full) begin
                 register_status[5] <= 1'b1;
-            end
-            else begin
+            end else begin
                 register_status[5] <= 1'b0;
+            end
+            
+            if (fifoIn_empty) begin
+                register_status[6] <= 1'b1; 
+            end else begin
+                register_status[6] <= 1'b0;
+            end
+            
+            if (fifoOut_empty) begin
+                register_status[7] <= 1'b1; 
+            end else begin
+                register_status[7] <= 1'b0;
+            end
+            
+            if (fifoSeed_empty) begin
+                register_status[8] <= 1'b1;
+            end else begin
+                register_status[8] <= 1'b0;
             end
 
         end
@@ -734,17 +739,12 @@
 	
 	always @( posedge S_AXI_ACLK )
 	begin
-        if ( S_AXI_ARESETN == 1'b0 )
-            begin
-              register_control <= 0;
-            end 
-          else
-            begin
-            
+        if ( S_AXI_ARESETN == 1'b0 ) begin
+            register_control <= 0;
+        end else begin
             // ENCRYPTION Control
             if (S_AXI_WDATA[0] && regControl_wren) begin
                register_control[0] <= 1'b1; 
-               register_status[0] <= 1'b1; // TODO: Mejorable, hay que sacar esto de aquí
             end else begin
                 if(device_encFin)
                     register_control[0] <= 1'b0;
@@ -753,7 +753,6 @@
             // DESENCRYPTION Control
             if (S_AXI_WDATA[1] && regControl_wren) begin
                 register_control[1] <= 1'b1;
-                register_status[1] <= 1'b1; // TODO: Mejorable, hay que sacar esto de aquí
             end else begin
                 if(device_decFin)
                     register_control[1] <= 1'b0;
@@ -762,14 +761,14 @@
             // KG Control
             if (fifoSeed_full) begin // Automatizado FIFO_SEED Full
                 register_control[2] <= 1'b1;
-            end
-            else begin
+            end else begin
                 if(device_kgFin)
                     register_control[2] <= 1'b0;
             end
+            
         end
     end
-    
+
     assign S_REG_CONTROL = register_control;
 	
 	// ------------------------------------------
@@ -825,7 +824,7 @@
         .full_fifo(fifoOut_full)
     );
     
-    assign fifoIn_wren = axi_wready && S_AXI_WVALID && fifo_data_addr_active ;     // Bloque para controlar escritura en la FIFO_IN  
+    assign fifoIn_wren = axi_wready && S_AXI_WVALID && fifo_dataIN_addr_active ;     // Bloque para controlar escritura en la FIFO_IN  
     
     reg enc_pos_d, dec_pos_d;
     // Bloque para controlar lectura de la FIFO_IN
@@ -867,29 +866,38 @@
             fifo_out_rden <= 0;
         end 
         else begin
-            fifo_out_rden = axi_arv_arr_flag && axi_rvalid && ~fifo_out_rden ;
+            fifo_out_rden = axi_arv_arr_flag && axi_rvalid && ~fifo_out_rden && (axi_araddr == 32'h0004); // TODO: Repasar con RM!!
         end
-	end
-
-	// Bloque para controlar salida al BUS AXI
-	always @(axi_rvalid)
-	begin
-	  if (axi_rvalid) 
-	    begin
-	      axi_rdata <= fifoOut_outData;
-	    end   
-	  else
-	    begin
-	      axi_rdata <= 32'h00000000; // TODO - Lo dejamos?
-	    end       
 	end
 		
 	// ------------------------------------------
 	// -- FIFOs_DATA Implementation Ends
 	// ------------------------------------------
+
+
+
+	// ------------------------------------------
+	// -- SALIDA AL BUS AXI4 Starts
+	// ------------------------------------------
+	always @( axi_araddr )
+	begin
+		case(axi_araddr)
+			// Añadir lectura del registro de control
+			6'h04: 
+			 axi_rdata <= fifoOut_outData;
+			6'h0C:
+			 axi_rdata <= S_REG_STATUS;
+			default:
+			 axi_rdata <= 32'h0000;
+		endcase
+	end
 	
+	// ------------------------------------------
+	// -- SALIDA AL BUS AXI4 Ends
+	// ------------------------------------------
 	
-	
+
+
 	// ------------------------------------------
 	// -- Device AES-256 Implementation Start
 	// ------------------------------------------	
