@@ -22,8 +22,10 @@
 		// Users to add ports here
         
         // Registers START
+        /* FOR TEST BENCH 
 		output wire [C_S00_AXI_DATA_WIDTH-1 : 0] s01_reg_status,
 		output wire [C_S00_AXI_DATA_WIDTH-1 : 0] s02_reg_control,
+		*/
 		// Registers ENDS
 
 		// User ports ends
@@ -134,11 +136,13 @@
 		.S_AXI_RLAST(s00_axi_rlast),
 		.S_AXI_RUSER(s00_axi_ruser),
 		.S_AXI_RVALID(s00_axi_rvalid),
-		.S_AXI_RREADY(s00_axi_rready),
+		.S_AXI_RREADY(s00_axi_rready)
 
 		// Add user logic here
-		.S_REG_STATUS(s01_reg_status),
+		/* FOR TESTBENCH
+		,.S_REG_STATUS(s01_reg_status),
 		.S_REG_CONTROL(s02_reg_control)
+		*/		
 		// User logic ends
 
 	);
