@@ -72,7 +72,7 @@ always @(posedge clk) begin: pointer_w
 end
 
 // Read BLOCK
-always @(posedge clk, posedge full_fifo) begin
+always @(posedge clk) begin
     if (resetn == 1'b0) begin
         read_fifo <= 1'b0;
     end else begin

@@ -848,7 +848,7 @@
     always @( posedge S_AXI_ACLK )
 	begin
         if (S_AXI_ARESETN == 1'b0) begin
-            fifo_in_rden <= 0;
+            fifo_out_wren <= 0;
         end else begin
             enc_neg_d <= register_control[0];
             dec_neg_d <= register_control[1];
